@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CineBox · Taquilla mundial</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>tailwind.config={theme:{extend:{colors:{gold:'#F5C518',crimson:'#E11D48',ink:'#0A0A0C'},fontFamily:{sans:['Plus Jakarta Sans','Inter','system-ui','sans-serif']}}}}</script>
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:#0A0A0C;color:#f4f4f5;font-family:'Plus Jakarta Sans',Inter,system-ui,sans-serif}
+.glass{background:rgba(255,255,255,.04);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.1)}
+.num{font-variant-numeric:tabular-nums}
+.sk{animation:pulse 1.4s ease-in-out infinite}@keyframes pulse{50%{opacity:.4}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid #F5C518;outline-offset:2px}
+</style>
+</head>
+<body>
+<header class="fixed inset-x-0 top-0 z-40 border-b border-white/10 bg-ink/70 backdrop-blur-md" style="padding-top:env(safe-area-inset-top,0px)">
+  <div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+    <span class="text-lg font-extrabold"><span class="text-gold">▮</span> CineBox</span>
+    <button id="listBtn" class="glass rounded-lg px-3 py-1.5 text-sm font-semibold"></button>
+  </div>
+</header>
+<div id="hero"></div>
+<main class="mx-auto max-w-7xl space-y-5 px-4 pb-16 pt-24" id="main">
+  <p class="glass rounded-lg px-4 py-2 text-sm text-zinc-400">Datos simulados con cifras aproximadas en dólares sin ajustar por inflación.</p>
+  <div class="flex flex-wrap gap-3">
+    <div class="glass flex rounded-lg p-1" id="tabs"></div>
+    <label class="glass flex min-w-[200px] flex-1 items-center gap-2 rounded-lg px-3 py-2"><span class="text-zinc-400">⌕</span>
+      <input id="q" placeholder="Buscar película…" aria-label="Buscar película" class="w-full bg-transparent text-sm outline-none placeholder:text-zinc-500"></label>
+  </div>
+  <div class="flex flex-wrap gap-3" id="sels"></div>
+  <div id="grid" class="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"></div>
+</main>
+<div id="modal" class="fixed inset-0 z-50 hidden items-start justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"></div>
+
+<script>
+const m=(id,title,year,rating,b,r,d,genres,director,studio,cast,overview)=>({id,title,year,rating,budget:b*1e6,revenue:r*1e6,domestic:d*1e6,genres,director,studio,cast,overview});
+const MOVIES=[
+m(1,'Avatar',2009,7.6,237,2924,785,['Ciencia ficción','Aventura'],'James Cameron','20th Century Studios',['Sam Worthington','Zoe Saldaña','Sigourney Weaver'],'Un marine parapléjico es enviado a Pandora y debe elegir entre sus órdenes y la defensa de un pueblo que empieza a sentir como propio.'),
+m(2,'Vengadores: Endgame',2019,8.3,356,2799,858,['Acción','Ciencia ficción','Aventura'],'Anthony y Joe Russo','Marvel Studios / Disney',['Robert Downey Jr.','Chris Evans','Scarlett Johansson'],'Tras la devastación de Thanos, los héroes que quedan se reúnen para intentar revertir el desastre.'),
+m(3,'Avatar: El camino del agua',2022,7.6,460,2320,684,['Ciencia ficción','Aventura'],'James Cameron','20th Century Studios',['Sam Worthington','Zoe Saldaña','Kate Winslet'],'Jake Sully y su familia buscan refugio entre los clanes del océano de Pandora.'),
+m(4,'Titanic',1997,7.9,200,2264,674,['Drama','Romance'],'James Cameron','Paramount / 20th Century Fox',['Leonardo DiCaprio','Kate Winslet','Billy Zane'],'Un romance entre dos jóvenes de clases opuestas a bordo del transatlántico que se hundió en su viaje inaugural.'),
+m(5,'Star Wars: El despertar de la Fuerza',2015,7.2,245,2071,937,['Ciencia ficción','Aventura','Acción'],'J.J. Abrams','Lucasfilm / Disney',['Daisy Ridley','John Boyega','Harrison Ford'],'Treinta años después de Endor, una nueva amenaza surge y una joven chatarrera descubre su destino.'),
+m(6,'Spider-Man: No Way Home',2021,8.0,200,1922,814,['Acción','Aventura','Ciencia ficción'],'Jon Watts','Sony Pictures / Marvel',['Tom Holland','Zendaya','Benedict Cumberbatch'],'Peter Parker pide ayuda al Doctor Strange para borrar su identidad y abre el multiverso.'),
+m(7,'Intensamente 2',2024,7.6,200,1699,653,['Animación','Comedia','Familiar'],'Kelsey Mann','Pixar / Disney',['Amy Poehler','Maya Hawke','Kensington Tallman'],'Riley llega a la adolescencia y aparecen emociones nuevas que desafían a las de siempre.'),
+m(8,'Barbie',2023,7.0,145,1446,636,['Comedia','Fantasía','Aventura'],'Greta Gerwig','Warner Bros.',['Margot Robbie','Ryan Gosling','America Ferrera'],'Barbie sale de Barbieland al mundo real y descubre qué significa ser humana.')
+];
+const $=s=>document.querySelector(s);
+const money=n=>n>=1e9?`$${(n/1e9).toFixed(2)}B`:`$${Math.round(n/1e6).toLocaleString('en-US')}M`;
+const roi=x=>x.revenue/x.budget;
+let wl=[];try{wl=JSON.parse(localStorage.getItem('cinebox:wl')||'[]')}catch(e){}
+const saveWl=()=>{try{localStorage.setItem('cinebox:wl',JSON.stringify(wl))}catch(e){}};
+const f={tab:'all',q:'',g:'',y:'',r:0,list:false};
+const sorted=()=>f.tab==='all'?[...MOVIES].sort((a,b)=>b.revenue-a.revenue):MOVIES.filter(x=>x.year>=2021).sort((a,b)=>b.year-a.year);
+const poster=(x,cls)=>`<div class="${cls} flex items-center justify-center p-3 text-center font-bold text-white/80" style="background:linear-gradient(145deg,hsl(${x.id*47%360} 45% 28%),#0A0A0C)">${x.title}</div>`;
+const bm=on=>`<svg width="16" height="16" viewBox="0 0 24 24" fill="${on?'#F5C518':'none'}" stroke="${on?'#F5C518':'#e4e4e7'}" stroke-width="2"><path d="M6 3h12v18l-6-4-6 4z"/></svg>`;
+function roiBar(x){const r=roi(x),p=Math.min(100,x.budget/x.revenue*100),c=r>=5?'text-emerald-400':r>=2?'text-gold':'text-crimson';
+ return `<div class="num space-y-1 text-xs"><div class="flex justify-between text-zinc-400"><span>${money(x.budget)}</span><span class="font-semibold text-zinc-100">${money(x.revenue)}</span></div>
+ <div class="h-1.5 overflow-hidden rounded-full bg-emerald-500/30"><div class="h-full rounded-full bg-crimson" style="width:${p}%"></div></div><div class="font-semibold ${c}">ROI ${r.toFixed(1)}×</div></div>`}
+function card(x,rank){const on=wl.includes(x.id);
+ return `<article class="glass group relative overflow-hidden rounded-xl transition duration-300 hover:-translate-y-1 hover:border-gold/50">
+ <button data-open="${x.id}" class="block w-full text-left"><div class="relative aspect-[2/3] overflow-hidden"><div class="h-full w-full transition duration-500 group-hover:scale-105">${poster(x,'h-full w-full')}</div>
+ <span class="num absolute left-2 top-2 rounded bg-black/70 px-2 py-0.5 text-sm font-extrabold text-gold">#${rank}</span>
+ <span class="num absolute bottom-2 left-2 rounded bg-black/70 px-2 py-0.5 text-xs font-semibold"><span class="text-gold">★</span> ${x.rating.toFixed(1)}</span></div>
+ <div class="space-y-2 p-3"><h3 class="line-clamp-1 font-bold">${x.title} <span class="font-normal text-zinc-500">${x.year}</span></h3>${roiBar(x)}</div></button>
+ <button data-save="${x.id}" aria-pressed="${on}" aria-label="${on?'Quitar de Mi lista':'Añadir a Mi lista'}" class="absolute right-2 top-2 rounded-full bg-black/70 p-2 hover:bg-black">${bm(on)}</button></article>`}
+function renderHero(){const x=sorted()[0],on=wl.includes(x.id);
+ $('#hero').innerHTML=`<section class="relative isolate overflow-hidden"><div class="absolute inset-0 -z-20" style="background:radial-gradient(circle at 75% 20%,rgba(225,29,72,.35),transparent 55%),linear-gradient(135deg,#1c1917,#0A0A0C)"></div>
+ <div class="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/60 to-transparent"></div>
+ <div class="mx-auto flex min-h-[70vh] max-w-7xl flex-col justify-end gap-4 px-4 pb-12 pt-32">
+ <p class="font-semibold text-gold">Nº 1 en taquilla mundial</p><h1 class="max-w-3xl text-4xl font-extrabold leading-tight sm:text-6xl">${x.title}</h1>
+ <p class="num text-5xl font-extrabold text-gold sm:text-7xl">${money(x.revenue)}</p><p class="max-w-xl text-zinc-300">${x.overview}</p>
+ <div class="flex flex-wrap gap-3 pt-2"><button data-open="${x.id}" class="rounded-lg bg-gold px-5 py-3 font-bold text-black hover:brightness-110">▶ Ver detalles</button>
+ <button data-save="${x.id}" class="glass flex items-center gap-2 rounded-lg px-5 py-3 font-semibold hover:bg-white/10">${bm(on)} ${on?'En Mi lista':'Añadir a Mi lista'}</button></div></div></section>`}
+function renderFilters(){const all=sorted(),sel='glass rounded-lg bg-ink px-3 py-2 text-sm';
+ const gs=[...new Set(all.flatMap(x=>x.genres))].sort(),ys=[...new Set(all.map(x=>x.year))].sort((a,b)=>b-a);
+ $('#tabs').innerHTML=[['all','Histórico'],['wk','Estrenos recientes']].map(([k,l])=>`<button data-tab="${k}" aria-pressed="${f.tab===k}" class="rounded-md px-4 py-1.5 text-sm font-semibold ${f.tab===k?'bg-gold text-black':'text-zinc-300 hover:text-white'}">${l}</button>`).join('');
+ $('#sels').innerHTML=`<select id="g" class="${sel}" aria-label="Género"><option value="">Todos los géneros</option>${gs.map(g=>`<option ${f.g===g?'selected':''}>${g}</option>`).join('')}</select>
+ <select id="y" class="${sel}" aria-label="Año"><option value="">Cualquier año</option>${ys.map(y=>`<option ${f.y==y?'selected':''}>${y}</option>`).join('')}</select>
+ <select id="r" class="${sel}" aria-label="Recaudación mínima">${[[0,'Cualquier recaudación'],[1e9,'Más de $1B'],[2e9,'Más de $2B']].map(([v,l])=>`<option value="${v}" ${f.r==v?'selected':''}>${l}</option>`).join('')}</select>`}
+function renderGrid(){const all=sorted(),rank=new Map(all.map((x,i)=>[x.id,i+1])),q=f.q.trim().toLowerCase();
+ const v=all.filter(x=>(!q||x.title.toLowerCase().includes(q))&&(!f.g||x.genres.includes(f.g))&&(!f.y||x.year==f.y)&&x.revenue>=f.r&&(!f.list||wl.includes(x.id)));
+ $('#grid').innerHTML=v.length?v.map(x=>card(x,rank.get(x.id))).join(''):`<p class="col-span-full py-16 text-center text-zinc-400">${f.list?'Tu lista está vacía. Toca el marcador de una película para guardarla.':'Ninguna película coincide. Prueba quitando algún filtro.'}</p>`;
+ $('#listBtn').innerHTML=`${bm(f.list)} Mi lista <span class="num">(${wl.length})</span>`;
+ $('#listBtn').className=`flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold ${f.list?'bg-gold text-black':'glass'}`}
+function openModal(id){const x=MOVIES.find(v=>v.id===id),on=wl.includes(id),dp=x.domestic/x.revenue*100;
+ const sim=MOVIES.filter(v=>v.id!==id&&v.genres.some(g=>x.genres.includes(g))).slice(0,4);
+ $('#modal').innerHTML=`<div class="glass my-8 w-full max-w-4xl rounded-2xl p-5 sm:p-8" style="background:rgba(12,12,14,.95)"><div class="mb-4 flex justify-end"><button data-close aria-label="Cerrar" class="rounded-full px-3 py-1 text-xl hover:bg-white/10">×</button></div>
+ <div class="grid gap-6 sm:grid-cols-[200px_1fr]">${poster(x,'aspect-[2/3] w-40 rounded-xl sm:w-full')}
+ <div class="space-y-4"><h2 class="text-3xl font-extrabold">${x.title} <span class="text-xl font-normal text-zinc-500">${x.year}</span></h2>
+ <p class="text-sm text-zinc-400">${x.genres.join(', ')}</p><p class="leading-relaxed text-zinc-200">${x.overview}</p>
+ <dl class="grid grid-cols-2 gap-3 text-sm"><div><dt class="text-zinc-500">Director</dt><dd class="font-semibold">${x.director}</dd></div><div><dt class="text-zinc-500">Distribuidora</dt><dd class="font-semibold">${x.studio}</dd></div>
+ <div class="col-span-2"><dt class="text-zinc-500">Reparto</dt><dd class="font-semibold">${x.cast.join(', ')}</dd></div></dl>
+ <button data-save="${id}" class="rounded-lg bg-gold px-4 py-2 font-bold text-black hover:brightness-110">${on?'Quitar de Mi lista':'Añadir a Mi lista'}</button></div></div>
+ <section class="mt-8 space-y-4"><h3 class="text-lg font-bold">Taquilla</h3>${roiBar(x)}
+ <div><div class="flex h-3 overflow-hidden rounded-full bg-crimson"><div class="bg-gold" style="width:${dp}%"></div></div>
+ <div class="num mt-2 flex justify-between text-sm"><span><i class="mr-1 inline-block size-2 rounded-full bg-gold"></i>Doméstica ${money(x.domestic)}</span><span><i class="mr-1 inline-block size-2 rounded-full bg-crimson"></i>Internacional ${money(x.revenue-x.domestic)}</span></div></div></section>
+ ${sim.length?`<section class="mt-8"><h3 class="mb-3 text-lg font-bold">Similares que también arrasaron</h3><div class="grid grid-cols-2 gap-3 sm:grid-cols-4">${sim.map(s=>`<button data-open="${s.id}" class="glass rounded-lg p-2 text-left hover:border-gold/50">${poster(s,'mb-2 aspect-[2/3] w-full rounded')}<p class="line-clamp-1 text-sm font-semibold">${s.title}</p><p class="num text-xs text-gold">${money(s.revenue)}</p></button>`).join('')}</div></section>`:''}</div>`;
+ $('#modal').classList.replace('hidden','flex');document.body.style.overflow='hidden'}
+function closeModal(){$('#modal').classList.replace('flex','hidden');document.body.style.overflow=''}
+let t;$('#q').addEventListener('input',e=>{clearTimeout(t);t=setTimeout(()=>{f.q=e.target.value;renderGrid()},300)});
+document.addEventListener('keydown',e=>e.key==='Escape'&&closeModal());
+$('#listBtn').addEventListener('click',()=>{f.list=!f.list;renderGrid()});
+document.addEventListener('change',e=>{const i=e.target.id;if(i==='g'||i==='y'||i==='r'){f[i]=i==='r'?Number(e.target.value):e.target.value;renderGrid()}});
+document.addEventListener('click',e=>{const el=e.target.closest('[data-open],[data-save],[data-tab],[data-close]');
+ if(!el){if(e.target.id==='modal')closeModal();return}
+ const d=el.dataset;
+ if(d.tab){f.tab=d.tab;f.g=f.y='';renderFilters();renderHero();renderGrid()}
+ else if(d.close!==undefined)closeModal();
+ else if(d.open){openModal(+d.open);$('#modal').scrollTop=0}
+ else if(d.save){const id=+d.save;wl=wl.includes(id)?wl.filter(v=>v!==id):[...wl,id];saveWl();renderHero();renderGrid();if(!$('#modal').classList.contains('hidden'))openModal(id)}});
+renderFilters();renderHero();renderGrid();
+</script>
+</body>
+</html>
